@@ -48,33 +48,6 @@ func main() {
 	}
 	defer watcher.Close()
 
-	done := make(chan bool)
-	go func() {
-		for {
-			select {
-			case event, ok := <-watcher.Events:
-				if !ok {
-					return
-				}
-				if verbose {
-					log.Println("event:", event)
-				}
-				if event.Op&fsnotify.Chmod != fsnotify.Chmod {
-					log.Println("modified file:", event.Name)
-					err := reloadProcess(processName, reloadSignal)
-					if err != nil {
-						log.Println("error:", err)
-					}
-				}
-			case err, ok := <-watcher.Errors:
-				if !ok {
-					return
-				}
-				log.Println("error:", err)
-			}
-		}
-	}()
-
 	configDirs := strings.Split(configDir, ",")
 	for _, dir := range configDirs {
 		err = watcher.Add(dir)
@@ -83,7 +56,29 @@ func main() {
 		}
 	}
 
-	<-done
+	for {
+		select {
+		case event, ok := <-watcher.Events:
+			if !ok {
+				return
+			}
+			if verbose {
+				log.Println("event:", event)
+			}
+			if event.Op&fsnotify.Chmod != fsnotify.Chmod {
+				log.Println("modified file:", event.Name)
+				err := reloadProcess(processName, reloadSignal)
+				if err != nil {
+					log.Println("error:", err)
+				}
+			}
+		case err, ok := <-watcher.Errors:
+			if !ok {
+				return
+			}
+			log.Println("error:", err)
+		}
+	}
 }
 
 func findPID(process string) (int, error) {
